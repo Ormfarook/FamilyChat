@@ -1,98 +1,106 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+// src/app/index.tsx
+// Route: "/" — this is the Welcome/Home screen, the app's default entry route.
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AppButton from '../components/AppButton';
+import { colors } from '../theme/colors';
+import { fontSizes, radius, spacing } from '../theme/theme';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+export default function WelcomeScreen() {
+  const router = useRouter();
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" />
 
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+      <View style={styles.topSection}>
+        <View style={styles.logoCircle}>
+          <Ionicons name="chatbubble-ellipses" size={44} color={colors.white} />
+        </View>
+        <Text style={styles.appName}>ChatWave</Text>
+        <Text style={styles.tagline}>Fast, simple and secure messaging</Text>
+      </View>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+      <View style={styles.illustrationRow}>
+        <View style={[styles.floatBubble, styles.floatBubbleLeft]} />
+        <View style={[styles.floatBubble, styles.floatBubbleRight]} />
+      </View>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+      <View style={styles.bottomSection}>
+        <AppButton title="Log In" onPress={() => router.push('/login')} />
+        <AppButton
+          title="Create Account"
+          variant="outline"
+          onPress={() => router.push('/register')}
+          style={{ marginTop: spacing.md }}
+        />
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
+    backgroundColor: colors.primaryDark,
+    justifyContent: 'space-between',
   },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
+  topSection: {
     alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+    marginTop: spacing.xxl,
   },
-  heroSection: {
+  logoCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: radius.round,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  appName: {
+    fontSize: fontSizes.xxxl,
+    fontWeight: '800',
+    color: colors.white,
+    letterSpacing: 0.5,
+  },
+  tagline: {
+    fontSize: fontSizes.md,
+    color: colors.primaryLight,
+    marginTop: spacing.xs,
+  },
+  illustrationRow: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+    justifyContent: 'center',
   },
-  title: {
-    textAlign: 'center',
+  floatBubble: {
+    position: 'absolute',
+    borderRadius: radius.xl,
+    backgroundColor: 'rgba(92,157,255,0.15)',
   },
-  code: {
-    textTransform: 'uppercase',
+  floatBubbleLeft: {
+    width: 180,
+    height: 90,
+    left: -40,
+    top: '20%',
+    transform: [{ rotate: '-8deg' }],
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  floatBubbleRight: {
+    width: 220,
+    height: 100,
+    right: -60,
+    top: '55%',
+    transform: [{ rotate: '10deg' }],
+  },
+  bottomSection: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.xl,
   },
 });
