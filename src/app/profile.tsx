@@ -4,26 +4,41 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppButton from '../components/AppButton';
 import AppInput from '../components/AppInput';
 import Avatar from '../components/Avatar';
-import { mockCurrentUser } from '../data/mockData';
+import { me as meApi } from '../api/endpoints';
+import { useAuth } from '../state/AuthContext';
+import { useServer } from '../state/ServerContext';
 import { colors } from '../theme/colors';
 import { fontSizes, radius, spacing } from '../theme/theme';
 
-// NOTE: requires `npx expo install expo-image-picker` and, on iOS/Android,
-// the relevant photo-library permission entries in app.json if not already present.
+// requires `expo-image-picker` and, on iOS/Android, photo-library permission
+// entries in app.json (not needed for the web build).
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const [avatar, setAvatar] = useState<string | null>(mockCurrentUser.avatar ?? null);
+  const { currentUser, api, logout, setCurrentUser } = useAuth();
+  const { setServerUrl, isBaked } = useServer();
+
   const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(mockCurrentUser.name);
-  const [bio, setBio] = useState(mockCurrentUser.bio ?? '');
+  const [name, setName] = useState(currentUser?.name ?? '');
+  const [bio, setBio] = useState(currentUser?.bio ?? '');
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const handleChangePicture = async () => {
+    if (!api) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       Alert.alert('Permission needed', 'Please allow photo library access to change your picture.');
@@ -35,19 +50,72 @@ export default function ProfileScreen() {
       aspect: [1, 1],
       quality: 0.8,
     });
-    if (!result.canceled) {
-      setAvatar(result.assets[0].uri);
-      // TODO: upload the new image to your backend / storage here
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    setUploading(true);
+    try {
+      const form = new FormData();
+      if (Platform.OS === 'web') {
+        const blobRes = await fetch(asset.uri);
+        const blob = await blobRes.blob();
+        form.append('file', blob, asset.fileName ?? 'avatar.jpg');
+      } else {
+        const filename = asset.fileName ?? asset.uri.split('/').pop() ?? 'avatar.jpg';
+        const type = asset.mimeType ?? guessMime(filename);
+        // React Native FormData accepts { uri, name, type }
+        form.append('file', { uri: asset.uri, name: filename, type } as unknown as Blob);
+      }
+      const { user } = await meApi(api).uploadAvatar(form);
+      setCurrentUser(user);
+    } catch {
+      Alert.alert('Upload failed', 'Could not upload that image. Try a different one.');
+    } finally {
+      setUploading(false);
     }
   };
 
-  const handleSave = () => {
-    // TODO: persist { name, bio, avatar } via your API
-    setEditing(false);
+  const handleSave = async () => {
+    if (!api) return;
+    setSaving(true);
+    try {
+      const trimmedName = name.trim();
+      const nextBio = bio.trim().length > 0 ? bio.trim() : null;
+      const { user } = await meApi(api).patch({
+        ...(trimmedName ? { name: trimmedName } : {}),
+        bio: nextBio,
+      });
+      setCurrentUser(user);
+      setEditing(false);
+    } catch {
+      Alert.alert('Could not save', 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logout();
     router.replace('/');
+  };
+
+  const handleChangeServer = () => {
+    Alert.alert(
+      'Change server',
+      'This will log you out and take you back to the server-setup screen.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+            await setServerUrl(null);
+            router.replace('/server-setup');
+          },
+        },
+      ],
+    );
   };
 
   return (
@@ -69,12 +137,16 @@ export default function ProfileScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.avatarSection}>
           <View>
-            <Avatar uri={avatar} name={name} size={110} />
-            <TouchableOpacity style={styles.cameraButton} onPress={handleChangePicture}>
-              <Ionicons name="camera" size={18} color={colors.white} />
+            <Avatar uri={currentUser?.avatarUrl} name={currentUser?.name} size={110} />
+            <TouchableOpacity
+              style={styles.cameraButton}
+              onPress={handleChangePicture}
+              disabled={uploading}
+            >
+              <Ionicons name={uploading ? 'hourglass-outline' : 'camera'} size={18} color={colors.white} />
             </TouchableOpacity>
           </View>
-          {!editing && <Text style={styles.name}>{name}</Text>}
+          {!editing && <Text style={styles.name}>{currentUser?.name}</Text>}
         </View>
 
         {editing ? (
@@ -87,21 +159,40 @@ export default function ProfileScreen() {
               icon="chatbox-ellipses-outline"
               multiline
             />
-            <AppButton title="Save changes" onPress={handleSave} />
+            <AppButton title="Save changes" onPress={handleSave} loading={saving} />
           </View>
         ) : (
           <View style={styles.detailsCard}>
-            <DetailRow icon="mail-outline" label="Email" value={mockCurrentUser.email ?? '-'} />
-            <DetailRow icon="call-outline" label="Phone" value={mockCurrentUser.phone ?? '-'} />
-            <DetailRow icon="chatbox-ellipses-outline" label="Bio" value={bio || '-'} />
+            <DetailRow icon="mail-outline" label="Email" value={currentUser?.email ?? '-'} />
+            <DetailRow
+              icon="chatbox-ellipses-outline"
+              label="Bio"
+              value={currentUser?.bio ?? '-'}
+            />
           </View>
         )}
 
+        {currentUser?.isAdmin && (
+          <AppButton
+            title="Admin panel"
+            variant="outline"
+            onPress={() => router.push('/admin')}
+            style={{ marginTop: spacing.lg }}
+          />
+        )}
+        {!isBaked && (
+          <AppButton
+            title="Change server"
+            variant="text"
+            onPress={handleChangeServer}
+            style={{ marginTop: currentUser?.isAdmin ? spacing.sm : spacing.lg }}
+          />
+        )}
         <AppButton
           title="Log Out"
           variant="outline"
           onPress={handleLogout}
-          style={{ marginTop: spacing.lg }}
+          style={{ marginTop: spacing.sm }}
         />
       </ScrollView>
     </SafeAreaView>
@@ -130,11 +221,16 @@ function DetailRow({
   );
 }
 
+function guessMime(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.gif')) return 'image/gif';
+  return 'image/jpeg';
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -148,20 +244,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
-    fontSize: fontSizes.lg,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  scroll: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
-  },
-  avatarSection: {
-    alignItems: 'center',
-    marginTop: spacing.md,
-    marginBottom: spacing.lg,
-  },
+  headerTitle: { fontSize: fontSizes.lg, fontWeight: '700', color: colors.textPrimary },
+  scroll: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
+  avatarSection: { alignItems: 'center', marginTop: spacing.md, marginBottom: spacing.lg },
   cameraButton: {
     position: 'absolute',
     right: -2,
@@ -181,19 +266,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.textPrimary,
   },
-  form: {
-    marginTop: spacing.sm,
-  },
-  detailsCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-  },
+  form: { marginTop: spacing.sm },
+  detailsCard: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md },
+  detailRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm },
   detailIcon: {
     width: 36,
     height: 36,
@@ -203,10 +278,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: spacing.md,
   },
-  detailLabel: {
-    fontSize: fontSizes.xs,
-    color: colors.textMuted,
-  },
+  detailLabel: { fontSize: fontSizes.xs, color: colors.textMuted },
   detailValue: {
     fontSize: fontSizes.md,
     color: colors.textPrimary,

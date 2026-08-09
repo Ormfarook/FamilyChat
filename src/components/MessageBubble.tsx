@@ -11,7 +11,14 @@ interface MessageBubbleProps {
   isMine: boolean;
 }
 
+function formatBubbleTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
 export default function MessageBubble({ message, isMine }: MessageBubbleProps) {
+  const showDoubleTick = message.status === 'read' || message.status === 'delivered';
   return (
     <View style={[styles.row, isMine ? styles.rowMine : styles.rowTheirs]}>
       <View
@@ -23,10 +30,12 @@ export default function MessageBubble({ message, isMine }: MessageBubbleProps) {
       >
         <Text style={isMine ? styles.textMine : styles.textTheirs}>{message.text}</Text>
         <View style={styles.metaRow}>
-          <Text style={isMine ? styles.timeMine : styles.timeTheirs}>{message.timestamp}</Text>
+          <Text style={isMine ? styles.timeMine : styles.timeTheirs}>
+            {formatBubbleTime(message.createdAt)}
+          </Text>
           {isMine && message.status && (
             <Ionicons
-              name={message.status === 'read' ? 'checkmark-done' : 'checkmark'}
+              name={showDoubleTick ? 'checkmark-done' : 'checkmark'}
               size={14}
               color={message.status === 'read' ? colors.accent : 'rgba(255,255,255,0.8)'}
               style={{ marginLeft: 4 }}

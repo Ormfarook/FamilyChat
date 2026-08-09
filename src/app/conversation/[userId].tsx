@@ -1,10 +1,8 @@
 // src/app/conversation/[userId].tsx
 // Route: "/conversation/:userId" — dynamic route for a single 1:1 chat.
-// Navigate to it with:
-//   router.push({ pathname: '/conversation/[userId]', params: { userId, userName, userAvatar } })
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -18,37 +16,65 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Avatar from '../../components/Avatar';
 import MessageBubble from '../../components/MessageBubble';
-import { mockConversations, mockUsers } from '../../data/mockData';
+import { useAuth } from '../../state/AuthContext';
+import { useChat } from '../../state/ChatContext';
 import { colors } from '../../theme/colors';
 import { fontSizes, radius, spacing } from '../../theme/theme';
-import { Message } from '../../types';
 
 export default function ConversationScreen() {
   const router = useRouter();
+  const { currentUser } = useAuth();
   const { userId, userName, userAvatar } = useLocalSearchParams<{
     userId: string;
     userName: string;
     userAvatar?: string;
   }>();
 
-  const contact = mockUsers.find((u) => u.id === userId);
-  const [messages, setMessages] = useState<Message[]>(mockConversations[userId] ?? []);
-  const [draft, setDraft] = useState('');
+  const { contacts, messagesByUser, loadConversation, sendMessage, markConversationRead, online } =
+    useChat();
+  const contact = contacts.find((c) => c.id === userId);
+  const isOnline = online[userId] ?? contact?.online ?? false;
+  const messages = messagesByUser[userId] ?? [];
 
-  const handleSend = () => {
-    if (!draft.trim()) return;
-    const newMessage: Message = {
-      id: `local-${Date.now()}`,
-      senderId: 'me',
-      text: draft.trim(),
-      timestamp: 'Now',
-      status: 'sent',
-    };
-    // TODO: send `newMessage.text` to your backend / socket, then reconcile
-    // the optimistic message above with the server response.
-    setMessages((prev) => [...prev, newMessage]);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const listRef = useRef<FlatList>(null);
+
+  // Load conversation history + mark read on mount, and again if userId changes.
+  useEffect(() => {
+    if (!userId) return;
+    void (async () => {
+      try {
+        await loadConversation(userId);
+        await markConversationRead(userId);
+      } catch {
+        // swallow — the user can retry by sending or navigating back
+      }
+    })();
+  }, [userId, loadConversation, markConversationRead]);
+
+  // Whenever a new inbound message from THIS contact arrives, mark it read.
+  const latestFromOtherId = messages.length > 0 ? messages[messages.length - 1]?.id : undefined;
+  const latestIsFromOther =
+    messages.length > 0 && messages[messages.length - 1]?.senderId === userId;
+  useEffect(() => {
+    if (!userId || !latestIsFromOther) return;
+    void markConversationRead(userId);
+  }, [latestFromOtherId, latestIsFromOther, userId, markConversationRead]);
+
+  const handleSend = useCallback(async () => {
+    const text = draft.trim();
+    if (!text || sending) return;
     setDraft('');
-  };
+    setSending(true);
+    try {
+      await sendMessage(userId, text);
+    } catch {
+      setDraft(text); // restore on failure
+    } finally {
+      setSending(false);
+    }
+  }, [draft, sending, sendMessage, userId]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -57,18 +83,14 @@ export default function ConversationScreen() {
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
 
-        <Avatar uri={userAvatar || undefined} name={userName} size={38} online={contact?.online} />
+        <Avatar uri={userAvatar || undefined} name={userName} size={38} online={isOnline} />
 
         <View style={styles.headerTextWrap}>
           <Text style={styles.headerName} numberOfLines={1}>
             {userName}
           </Text>
-          <Text style={styles.headerStatus}>{contact?.online ? 'Online' : 'Offline'}</Text>
+          <Text style={styles.headerStatus}>{isOnline ? 'Online' : 'Offline'}</Text>
         </View>
-
-        <TouchableOpacity style={styles.headerButton}>
-          <Ionicons name="call-outline" size={20} color={colors.primary} />
-        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -77,16 +99,17 @@ export default function ConversationScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <FlatList
+          ref={listRef}
           data={messages}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => <MessageBubble message={item} isMine={item.senderId === 'me'} />}
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+          renderItem={({ item }) => (
+            <MessageBubble message={item} isMine={item.senderId === currentUser?.id} />
+          )}
         />
 
         <View style={styles.inputBar}>
-          <TouchableOpacity style={styles.attachButton}>
-            <Ionicons name="add" size={22} color={colors.primary} />
-          </TouchableOpacity>
           <TextInput
             value={draft}
             onChangeText={setDraft}
@@ -94,8 +117,13 @@ export default function ConversationScreen() {
             placeholderTextColor={colors.textMuted}
             style={styles.textInput}
             multiline
+            onSubmitEditing={handleSend}
           />
-          <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
+          <TouchableOpacity
+            style={[styles.sendButton, (!draft.trim() || sending) && styles.sendButtonDisabled]}
+            onPress={handleSend}
+            disabled={!draft.trim() || sending}
+          >
             <Ionicons name="send" size={18} color={colors.white} />
           </TouchableOpacity>
         </View>
@@ -105,10 +133,7 @@ export default function ConversationScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -124,23 +149,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTextWrap: {
-    flex: 1,
-    marginLeft: spacing.sm,
-  },
-  headerName: {
-    fontSize: fontSizes.md,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  headerStatus: {
-    fontSize: fontSizes.xs,
-    color: colors.textSecondary,
-  },
-  listContent: {
-    paddingVertical: spacing.md,
-    flexGrow: 1,
-  },
+  headerTextWrap: { flex: 1, marginLeft: spacing.sm },
+  headerName: { fontSize: fontSizes.md, fontWeight: '700', color: colors.textPrimary },
+  headerStatus: { fontSize: fontSizes.xs, color: colors.textSecondary },
+  listContent: { paddingVertical: spacing.md, flexGrow: 1 },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -149,15 +161,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.divider,
-  },
-  attachButton: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.round,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs,
   },
   textInput: {
     flex: 1,
@@ -178,4 +181,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: spacing.xs,
   },
+  sendButtonDisabled: { opacity: 0.5 },
 });

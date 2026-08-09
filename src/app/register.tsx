@@ -15,11 +15,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppButton from '../components/AppButton';
 import AppInput from '../components/AppInput';
+import { useAuth } from '../state/AuthContext';
 import { colors } from '../theme/colors';
 import { fontSizes, spacing } from '../theme/theme';
+import { messageForAuthError } from '../util/authErrors';
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const { register } = useAuth();
+  const [inviteCode, setInviteCode] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,7 +32,7 @@ export default function RegisterScreen() {
   const [error, setError] = useState('');
 
   const handleRegister = async () => {
-    if (!name || !email || !password || !confirmPassword) {
+    if (!inviteCode || !name || !email || !password || !confirmPassword) {
       setError('Please fill in all fields.');
       return;
     }
@@ -36,14 +40,22 @@ export default function RegisterScreen() {
       setError('Passwords do not match.');
       return;
     }
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
-      // TODO: replace with your real signup call, e.g. await api.register({ name, email, password })
-      await new Promise((resolve) => setTimeout(resolve, 900));
+      await register({
+        inviteCode: inviteCode.trim(),
+        name: name.trim(),
+        email: email.trim(),
+        password,
+      });
       router.replace('/contacts');
     } catch (e) {
-      setError('Something went wrong, please try again.');
+      setError(messageForAuthError(e));
     } finally {
       setLoading(false);
     }
@@ -64,6 +76,14 @@ export default function RegisterScreen() {
           <Text style={styles.subtitle}>Join and start chatting in seconds</Text>
 
           <View style={styles.form}>
+            <AppInput
+              label="Invite code"
+              value={inviteCode}
+              onChangeText={setInviteCode}
+              placeholder="e.g. H2X4KQZP"
+              icon="key-outline"
+              autoCapitalize="characters"
+            />
             <AppInput
               label="Full name"
               value={name}

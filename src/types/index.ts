@@ -1,26 +1,63 @@
-// src/types/index.ts
-// Shared data models. Replace / extend these once your backend API contracts
-// are finalized (e.g. add fields returned by your auth or chat service).
+// Shared types mirror the backend's public shapes:
+//   User    ← backend util/publicUser.ts (PublicUser)
+//   Contact ← backend services/users.ts (ContactSummary)
+//   Message ← backend services/messages.ts (PublicMessage)
+
+export type MessageStatus = 'sent' | 'delivered' | 'read';
 
 export interface User {
   id: string;
   name: string;
-  email?: string;
-  phone?: string;
-  bio?: string;
-  avatar?: string | null;
-  online?: boolean;
-  lastMessage?: string;
-  lastMessageTime?: string;
-  unreadCount?: number;
+  email: string;
+  bio: string | null;
+  avatarUrl: string | null;
+  isAdmin: boolean;
 }
 
-export type MessageStatus = 'sent' | 'delivered' | 'read';
+export interface Contact {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  lastMessage: string | null;
+  lastMessageAt: string | null;
+  unreadCount: number;
+  online?: boolean; // populated by realtime presence, not the REST payload
+}
 
 export interface Message {
   id: string;
-  senderId: string; // 'me' for the current user, or the contact's id
+  senderId: string;
+  recipientId: string;
   text: string;
-  timestamp: string; // ISO string or preformatted display time
-  status?: MessageStatus;
+  createdAt: string;
+  deliveredAt: string | null;
+  readAt: string | null;
+  status: MessageStatus;
+  clientTempId?: string;
+}
+
+export interface ApiError {
+  error: string;
+  details?: unknown;
+}
+
+// Admin-only shapes — mirror backend/src/services/admin.ts.
+export interface AdminUserRow {
+  id: string;
+  email: string;
+  name: string;
+  bio: string | null;
+  avatarUrl: string | null;
+  isAdmin: boolean;
+  createdAt: string;
+  messageCount: number;
+}
+
+export interface AdminInviteRow {
+  code: string;
+  createdBy: { id: string; name: string } | null;
+  consumedBy: { id: string; name: string } | null;
+  createdAt: string;
+  consumedAt: string | null;
 }

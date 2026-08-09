@@ -15,11 +15,14 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppButton from '../components/AppButton';
 import AppInput from '../components/AppInput';
+import { useAuth } from '../state/AuthContext';
 import { colors } from '../theme/colors';
 import { fontSizes, spacing } from '../theme/theme';
+import { messageForAuthError } from '../util/authErrors';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,11 +36,10 @@ export default function LoginScreen() {
     setError('');
     setLoading(true);
     try {
-      // TODO: replace with your real auth call, e.g. await api.login(email, password)
-      await new Promise((resolve) => setTimeout(resolve, 900));
+      await login({ email: email.trim(), password });
       router.replace('/contacts');
     } catch (e) {
-      setError('Invalid credentials, please try again.');
+      setError(messageForAuthError(e));
     } finally {
       setLoading(false);
     }
