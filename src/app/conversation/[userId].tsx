@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Avatar from '../../components/Avatar';
 import MessageBubble from '../../components/MessageBubble';
 import { useAuth } from '../../state/AuthContext';
@@ -39,6 +39,7 @@ export default function ConversationScreen() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const listRef = useRef<FlatList>(null);
+  const insets = useSafeAreaInsets();
 
   // Load conversation history + mark read on mount, and again if userId changes.
   useEffect(() => {
@@ -109,7 +110,7 @@ export default function ConversationScreen() {
           )}
         />
 
-        <View style={styles.inputBar}>
+        <View style={[styles.inputBar, { paddingBottom: spacing.sm + insets.bottom }]}>
           <TextInput
             value={draft}
             onChangeText={setDraft}

@@ -19,7 +19,6 @@ import AppInput from '../components/AppInput';
 import Avatar from '../components/Avatar';
 import { me as meApi } from '../api/endpoints';
 import { useAuth } from '../state/AuthContext';
-import { useServer } from '../state/ServerContext';
 import { colors } from '../theme/colors';
 import { fontSizes, radius, spacing } from '../theme/theme';
 
@@ -29,7 +28,6 @@ import { fontSizes, radius, spacing } from '../theme/theme';
 export default function ProfileScreen() {
   const router = useRouter();
   const { currentUser, api, logout, setCurrentUser } = useAuth();
-  const { setServerUrl, isBaked } = useServer();
 
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(currentUser?.name ?? '');
@@ -99,27 +97,8 @@ export default function ProfileScreen() {
     router.replace('/');
   };
 
-  const handleChangeServer = () => {
-    Alert.alert(
-      'Change server',
-      'This will log you out and take you back to the server-setup screen.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Continue',
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
-            await setServerUrl(null);
-            router.replace('/server-setup');
-          },
-        },
-      ],
-    );
-  };
-
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
@@ -180,19 +159,11 @@ export default function ProfileScreen() {
             style={{ marginTop: spacing.lg }}
           />
         )}
-        {!isBaked && (
-          <AppButton
-            title="Change server"
-            variant="text"
-            onPress={handleChangeServer}
-            style={{ marginTop: currentUser?.isAdmin ? spacing.sm : spacing.lg }}
-          />
-        )}
         <AppButton
           title="Log Out"
           variant="outline"
           onPress={handleLogout}
-          style={{ marginTop: spacing.sm }}
+          style={{ marginTop: currentUser?.isAdmin ? spacing.sm : spacing.lg }}
         />
       </ScrollView>
     </SafeAreaView>
