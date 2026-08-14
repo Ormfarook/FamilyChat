@@ -37,7 +37,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   // Refresh contacts list.
   const refreshContacts = useCallback(async () => {
-    if (!api) return;
     setContactsLoading(true);
     try {
       const { users } = await usersApi(api).list();
@@ -56,7 +55,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const loadConversation = useCallback(
     async (userId: string) => {
-      if (!api) return;
       const { messages: msgs } = await messagesApi(api).list(userId);
       setMessagesByUser((prev) => ({ ...prev, [userId]: msgs }));
     },
@@ -65,7 +63,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const sendMessage = useCallback(
     async (userId: string, text: string) => {
-      if (!api || !currentUser) return;
+      if (!currentUser) return;
       const tempId = `local-${Date.now()}`;
       const optimistic: Message = {
         id: tempId,
@@ -103,7 +101,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const markConversationRead = useCallback(
     async (userId: string) => {
-      if (!api) return;
       const { readIds } = await messagesApi(api).markConversationRead(userId);
       if (readIds.length > 0) {
         const readAt = new Date().toISOString();
@@ -121,7 +118,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   // Socket lifecycle.
   useEffect(() => {
-    if (status !== 'authenticated' || !serverUrl || !token || !currentUser) return;
+    if (status !== 'authenticated' || !token || !currentUser) return;
 
     const sock = io(serverUrl, {
       auth: { token },

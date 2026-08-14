@@ -1,7 +1,7 @@
 // app.config.js — JS form of app.json (no behavioural difference right now).
-// The dev-server URL is NOT injected here — use the EXPO_PUBLIC_SERVER_URL
-// env var instead (Metro inlines EXPO_PUBLIC_* vars into the bundle at build
-// time, which is what we actually want). See src/state/ServerContext.tsx.
+// The backend URL is NOT injected here — use the EXPO_PUBLIC_SERVER_URL env
+// var instead, which Metro inlines into the bundle at build time. Read it via
+// src/config/serverUrl.ts.
 
 module.exports = ({ config }) => ({
   ...config,
